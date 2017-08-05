@@ -9,7 +9,7 @@ use HTTP::Tiny;
 # NOTE: if you add more non-core modules,
 # be sure to update ./pack!
 
-use Getopt::Long qw/GetOptionsFromArray :config no_ignore_case/;
+use Getopt::Long qw/GetOptionsFromArray :config permute no_ignore_case/;
 use File::Temp qw/tempdir tempfile/;
 use File::Basename qw/dirname/;
 use POSIX qw/strftime/;
@@ -554,6 +554,12 @@ sub unique_suffix {
 		push @pre, $a;
 	}
 	return join('-', @pre), @b;
+}
+
+sub environment_exists {
+	my ($env) = @_;
+	$env =~ s/(\.yml)?$/.yml/;
+	return -f $env;
 }
 
 sub mergeable_yaml_files {
@@ -3247,6 +3253,13 @@ sub options {
 	chdir_or_fail $options->{cwd} if $options->{cwd};
 }
 
+sub ordered_options {
+	my ($args,$options,@spec) = @_;
+	Getopt::Long::Configure('require_order');
+	options($args,$options,@spec);
+	Getopt::Long::Configure('permute');
+}
+
 sub command {
 	my ($name, $usage, $fn) = @_;
 	if (ref($name) ne 'ARRAY') {
@@ -4553,6 +4566,103 @@ sub {
 	bosh_run_errand($target, $deployment, $ENV{ERRAND_NAME}); # exits on failure
 
 	exit 0;
+});
+# }}}
+
+command("apply", <<EOF,
+genesis v$VERSION
+USAGE genesis apply <env> [-c|--cloud-config <path>] [--subkit <subkit-name>] <script> [<script-options>]
+USAGE genesis apply <env> --list | --list-all
+
+Runs a kit script against the given environment.  The script used is specific
+to the version of the kit that the environment YAML file specifies, and limited
+to the subkits selected so different environments may have different scripts
+available to it.
+
+Options:
+      --list:         list available kit scripts for the given environment file.
+      --list-all      list all scripts available in the kit, including ones
+                      that aren't available to the given environment file due
+                      to subkitselection.
+  -c, --cloud-config  specify the cloud config to use.  If not specified, it
+                      will attempt to download from the enviroments BOSH
+                      director.
+      --subkit        In the case where two or more subkits provide the same
+                      script, use this to indicate which to use.  If not
+                      provided and there is an ambiguous script requested, an
+                      error will occur.
+
+
+EOF
+sub {
+	my %options;
+	my @local_opts = qw(
+		list|l
+		list-all|l
+		cloud-config|c=s
+		subkit=s
+	);
+	
+	ordered_options(\@_, \%options, @local_opts);
+	my $env = shift || '';
+	ordered_options(\@_, \%options, @local_opts);
+	
+	check_prereqs;
+	usage(1,"Missing environment argument") unless $env;
+	usage(1,"No environment named $env found") unless environment_exists($env);
+
+	my ($name,$version) = kit_name_and_version_for $env;
+	my %subkits = map {$_ => 1} get_key('kit.subkits', $env, ());
+
+	if ($options{list} || $options{"list-all"}) {
+		# Determine kit script
+		my @subkits = get_key($env,'kit.subkits');
+		
+		my @files;
+		if ($name eq 'dev') {
+			@files = glob('dev/*');
+		} elsif ($name && $version) {
+			@files = split("\n", qx(tar -tz-f .genesis/kits/$name-$version.tar.gz));
+		} else {
+			die "Cannot determine kit name and version for $env\n";
+		}
+		my %availability = ();
+		foreach (grep {$_} map { m/((base)|subkits\/([^\/]+))\/(.*\.yml)/ ? [$4 => $2 || $3] : undef} @files) {
+			$availability{$_->[0]} ||= [];
+			push @{$availability{$_->[0]}}, $_->[1] if $subkits{$_->[1]} || $options{"list-all"};
+		}
+
+
+	}
+
+	my $script = shift || '';
+	my @script_opts = @_;
+
+	$ENV{REDACT} = '';
+	my $create_env = is_create_env($env);
+	$ENV{OFFLINE} = 1 if ($create_env);
+
+	if (!$options{"cloud-config"} && !$create_env) {
+		if (!online) {
+			error "You requested #B{offline} mode, but did not provide a #C{--cloud-config} to use.\n";
+			error "In offline mode, Genesis is not allowed to talk to the BOSH director,\n";
+			error "so you must provide a cloud config explicitly.\n";
+			exit 1;
+		}
+		my $dir = workdir;
+		bosh_download_cloud_config(bosh_target_for($env), "$dir/cloud.yml");
+		$options{"cloud-config"} = "$dir/cloud.yml";
+	}
+
+	# Make the manifest (unredacted) to:
+	#   a) Determine kit version
+	#   b) Make it available to the script as stdin.
+	my $manifest = merge_manifest($env, {
+		'cloud-config' => $options{'cloud-config'},
+		'create-env'   => $create_env,
+	});
+	# Q: Do we need the cloud-config info sent to script?
+
 });
 # }}}
 
