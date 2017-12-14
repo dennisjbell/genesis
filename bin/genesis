@@ -4384,7 +4384,8 @@ sub prompt_for_boshes_and_stemcells_for {
 	if (-f $ENV{HOME}."/.bosh/config") {
 		my $bosh_json = decode_json(qx{spruce json \$HOME/.bosh/config});
 		$boshes{$_->{alias}} = {
-			url => (($_->{url} =~ /:\d+$/) ? $_->{url} : $_->{url}.":25555"),
+			#url => (($_->{url} =~ /:\d+$/) ? $_->{url} : $_->{url}.":25555"),
+			url => $_->{url},
 			username => $_->{username},
 			password => $_->{password},
 			ca_cert => $_->{ca_cert},
@@ -4407,14 +4408,16 @@ sub prompt_for_boshes_and_stemcells_for {
 		$boshenvs{$env}{alias} = prompt_for_line("Display name", undef, $env);
 
 		if (is_valid_uri($envs{$e}{bosh})) {
-			$boshenvs{$env}{url} = $envs{$e}{bosh}
+			$boshenvs{$env}{url} = $envs{$e}{bosh};
 		} else {
-			$boshenvs{$env}{url} = $bosh_info{url}
+			$boshenvs{$env}{url} = $bosh_info{url};
+			$boshenvs{$env}{url} .= ":25555" unless $boshenvs{$env}{url} =~ m/:\d+$/;
 		}
 		if ($boshenvs{$env}{url}) {
 			explain "\nUsing BOSH director at #C{$boshenvs{$env}{url}}";
 		} else {
 			$boshenvs{$env}{url} = prompt_for_line("Could not determine BOSH url -- please specify fully\ne.g.: https://10.0.1.44:25555");
+			$boshenvs{$env}{url} .= ":25555" unless $boshenvs{$env}{url} =~ m/:\d+$/;
 		}
 
 		if ($bosh_info{username}) {
@@ -5433,10 +5436,10 @@ sub generate_ci_approle_policies {
 	die "Could not create approle for $role_name:\n$r\n" unless ($? >> 8) == 0;
 
 	explain "#Y{Getting role and secret credentials from AppRole}\n";
-	my ($role_p, $role_k) = $role_path =~/^(.*):[^:]*$/;
+	my ($role_p, $role_k) = $role_path =~/^(.*):([^:]*)$/;
 	die "Invalid vault path $role_path: expecting <path>:<key>\n" unless defined($role_p) && defined($role_k);
 
-	my ($secret_p, $secret_k) = $secret_path =~/^(.*):[^:]*$/;
+	my ($secret_p, $secret_k) = $secret_path =~/^(.*):([^:]*)$/;
 	die "Invalid vault path $secret_path: expecting <path>:<key>\n" unless defined($secret_p) && defined($secret_k);
 
 	$r = qx(safe read auth/approle/role/$role_name/role-id | spruce json | jq -r .role_id | safe paste $role_p $role_k);
