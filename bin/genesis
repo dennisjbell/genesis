@@ -4398,12 +4398,11 @@ sub prompt_for_boshes_and_stemcells_for {
 	foreach my $e (sort keys(%envs)) {
 		my $env = $envs{$e}{env};
 		explain "\n#W{==> Environment:} #C{$env} (./$envs{$e}{file})";
-		$boshenvs{$env} = {};
-		my %bosh_info = %{$boshes{$envs{$e}{bosh}}};
-
 		next unless prompt_for_boolean("Do you want to use this environment [y|n]?", 1);
 		$chosen_envs{$e} = $envs{$e};
 
+		$boshenvs{$env} = {};
+		my %bosh_info = %{$boshes{$envs{$e}{bosh}}};
 		# Get display name (defaults to environment)
 		$boshenvs{$env}{alias} = prompt_for_line("Display name", undef, $env);
 
@@ -5454,8 +5453,10 @@ sub generate_ci_hcl_file {
 		@vault_paths
 	) = @_;
 
-	my $fh = *STDOUT;
-	unless ($hclfile eq '-') {
+	my $fh;
+	if ($hclfile eq '-') {
+		$fh = *STDOUT;
+	} else {
 		open($fh, ">$hclfile") or die "can't open $hclfile: $!\n";
 	}
 
@@ -5469,7 +5470,7 @@ sub generate_ci_hcl_file {
 		|}
 		|EOF
 	}
-	close $fh unless $hclfile eq '-';
+	close $fh unless ($hclfile eq '-');
 }
 
 # }}}
