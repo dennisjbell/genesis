@@ -4533,6 +4533,11 @@ sub boolean_to_yaml {
 sub generate_ci_template_file() {
 	my ($pipeline, $name) = @_;
 
+	use Data::Dumper;
+	open(my $fh, ">", "/tmp/ci-data.out");
+	print $fh Dumper($pipeline);
+	close $fh;
+
 	open my $OUT, ">", $name or die "Unable to open $name for writing: $!\n";
 	print $OUT <<"EOF";
 pipeline:
@@ -4610,7 +4615,7 @@ EOF
 	my @stemcells = split("\n",$pipeline->{stemcells});
 	print $OUT <<"EOF";
 
-  stemcells:${\(scalar(keys %{$pipeline->{stemcells}}) ? "" : " []")}
+  stemcells:${\(scalar(keys %{$pipeline->{stemcells}}) ? "" : " {}")}
 EOF
 	foreach my $alias (keys %{$pipeline->{stemcells}}) {
 		print $OUT <<"EOF"
