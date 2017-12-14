@@ -4120,7 +4120,7 @@ sub prompt_for_git {
 	my $gitremote = qx(git config --get remote.origin.url);
 	if ($gitremote) {
 		chomp($gitremote);
-		($user,$host,$org,$repo) = $gitremote =~ qr/^(?:ssh:\/\/([^@]+)@)?([^\/:]*)[\/:](?:(.*)\/)?([^\/]+)$/
+		($user,$host,$org,$repo) = $gitremote =~ qr/^(?:(?:ssh:\/\/)?([^@]+)@)?([^\/:]*)[\/:](?:(.*)\/)?([^\/]+)$/
 		  if $gitremote =~ qr/^ssh:.*/;
 	  ($host,$org,$repo) = $gitremote =~ qr/^https:\/\/([^\/:]*)[\/:](?:(.*)\/)?([^\/]+)$/
 		if $gitremote =~ qr/^https:.*/;
@@ -4384,7 +4384,7 @@ sub prompt_for_boshes_and_stemcells_for {
 	if (-f $ENV{HOME}."/.bosh/config") {
 		my $bosh_json = decode_json(qx{spruce json \$HOME/.bosh/config});
 		$boshes{$_->{alias}} = {
-			url => $_->{url},
+			url => (($_->{url} =~ /:\d+$/) ? $_->{url} : $_->{url}.":25555"),
 			username => $_->{username},
 			password => $_->{password},
 			ca_cert => $_->{ca_cert},
