@@ -5437,10 +5437,10 @@ sub generate_ci_approle_policies {
 
 	explain "#Y{Getting role and secret credentials from AppRole}\n";
 	my ($role_p, $role_k) = $role_path =~/^(.*):([^:]*)$/;
-	die "Invalid vault path $role_path: expecting <path>:<key>\n" unless defined($role_p) && defined($role_k);
+	die "Invalid vault path '$role_path': expecting <path>:<key>\n" unless defined($role_p) && defined($role_k);
 
 	my ($secret_p, $secret_k) = $secret_path =~/^(.*):([^:]*)$/;
-	die "Invalid vault path $secret_path: expecting <path>:<key>\n" unless defined($secret_p) && defined($secret_k);
+	die "Invalid vault path '$secret_path': expecting <path>:<key>\n" unless defined($secret_p) && defined($secret_k);
 
 	$r = qx(safe read auth/approle/role/$role_name/role-id | spruce json | jq -r .role_id | safe paste $role_p $role_k);
 	die "Could not store role_id to $role_path:\n$r\n" unless ($? >> 8) == 0;
