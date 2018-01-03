@@ -74,10 +74,12 @@ sub valid_envs {
 		next unless $json && $json->{params} && $json->{params}{env};
 		(my $label= $_) =~ s/\.yml$//;
 		$envs{$label} = {
-			file  => $_,
-			env   => $json->{params}{env},
-			vault => $json->{params}{vault} || join('/',(split('-', $json->{params}{env}))),
-			bosh  => $json->{params}{bosh}  || $json->{params}{env}
+			file            => $_,
+			env             => $json->{params}{env},
+			vault           => $json->{params}{vault} || join('/',(split('-', $json->{params}{env}))),
+			bosh            => $json->{params}{bosh}  || $json->{params}{env},
+			specifies_vault => defined($json->{params}{vault}),
+			specifies_bosh  => defined($json->{params}{bosh})
 		}
 	}
 	return %envs;
