@@ -1,0 +1,28 @@
+#!/usr/bin/perl
+for (qw(.genesis .genesis/code)) {
+	mkdir "$ENV{HOME}/$_" unless -d "$ENV{HOME}/$_";
+}
+my $root = "$ENV{HOME}/.genesis/code";
+
+# check the checksum to see if we should untar
+chomp(my $want = <DATA>);
+open my $fh, "<", "$root/checksum";
+chomp(my $actual = <$fh>);
+close $fh;
+
+if ($want ne $actual) {
+	system("rm -rf $root/*");
+
+	# extract the payload
+	print STDERR "(inflating genesis runtime...)\n";
+	open my $tar, "|-", "tar -xzf - -C $root"
+		or die "Failed to do stuff\n";
+	while (<DATA>) { print $tar $_; }
+	close $tar;
+}
+
+# run it!
+$ENV{PERL5LIB} = "$root/lib";
+exec "$root/genesis", @ARGV;
+
+__DATA__

@@ -1,0 +1,15 @@
+#!/bin/bash
+set -eu
+
+rm -rf pkg/ pkg.tgz
+mkdir pkg
+
+cp -a bin/genesis lib/ pkg/
+# FIXME: modify version, set git commit, etc.
+checksum=$(tar -czf - -C pkg . | sha1sum | awk '{print $1}')
+echo "$checksum" > pkg/checksum
+tar -czf pkg.tgz -C pkg .
+
+(cat stub; echo "$checksum"; cat pkg.tgz) > genesis-packed
+chmod 0755 genesis-packed
+rm -rf pkg/ pkg.tgz
