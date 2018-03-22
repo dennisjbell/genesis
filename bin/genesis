@@ -1,23 +1,21 @@
-#!/usr/bin/env perl
+#!/usr/bin/perl
 # vim:ft=perl:noet:ts=4:sts=4:sw=4
 use strict;
 use warnings;
 
 # non-core modules
 use JSON::PP qw/decode_json encode_json/;
-use HTTP::Tiny;
-# NOTE: if you add more non-core modules,
-# be sure to update ./pack!
+# NOTE: if you add more non-core modules, they and all their non-core
+# dependencies have to be placed in lib/
 
 use Getopt::Long qw/GetOptionsFromArray :config no_ignore_case/;
 use File::Temp qw/tempdir tempfile/;
 use File::Basename qw/dirname basename/;
 use POSIX qw/strftime/;
-use FindBin;
 use Socket qw/inet_ntoa/;
 use Cwd qw/getcwd abs_path/;
-#use lib "$FindBin::Bin/../lib";
 
+# Genesis Libs
 use Genesis::Utils;
 use Genesis::Run;
 
@@ -25,9 +23,7 @@ our $VERSION = "(development)";
 our $GITHUB_URL = "https://github.com/starkandwayne/genesis";
 our $USER_AGENT_STRING = "genesis/$VERSION";
 
-if ($ENV{BOSH_ALL_PROXY}) {
-	$ENV{HTTPS_PROXY}=$ENV{BOSH_ALL_PROXY};
-}
+$ENV{HTTPS_PROXY}=$ENV{BOSH_ALL_PROXY} if ($ENV{BOSH_ALL_PROXY});
 
 sub DumpJSON {
 	my ($file, $data) = @_;
@@ -6499,7 +6495,6 @@ sub {
 sub main {
 	debug "genesis starting up...";
 
-	$ENV{GENESIS} = $FindBin::Script;
 	$ENV{GENESIS_INDEX} = "https://genesis.starkandwayne.com" unless $ENV{GENESIS_INDEX};
 
 	# Check if we're in a v1 repo
