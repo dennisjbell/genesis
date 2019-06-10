@@ -194,7 +194,7 @@ subtest 'available kits' => sub {
 	my $kit_provider = Genesis::Kit::Provider::GenesisCommunity->init();
 
 	lives_ok { @kits = $kit_provider->kit_names } "Can get a list of downloadable kits from Github";
-	@expected = qw(blacksmith bosh cf concourse jumpbox logsearch shield vault);
+	@expected = qw(blacksmith bosh cf concourse jumpbox shield vault);
 	cmp_deeply(\@kits, supersetof(@expected),
 		"Downloadable kits includes at least the core kits known at the time of this writing.");
 	
