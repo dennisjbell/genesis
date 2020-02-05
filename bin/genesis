@@ -2039,13 +2039,10 @@ vaults:
     skip_verify: @{[envset("VAULT_SKIP_VERIFY") ? "true" : "false"]}
 EOF
 
+	close $OUT;
+
 	# Load the environment in order to check other required variables
 	pushd $ENV{WORKING_DIR};
-	my $env = Genesis::Top->new('.')->load_env($ENV{CURRENT_ENV});
-	push(@undefined, grep { !$ENV{$_} }
-		qw/BOSH_ENVIRONMENT BOSH_CA_CERT
-		   BOSH_CLIENT BOSH_CLIENT_SECRET/) unless $env->needs_bosh_create_env;
-	__bail_on_missing_pipeline_environment_variables(@undefined);
 
 	if ($ENV{PREVIOUS_ENV}) {
 		run({ onfailure => "Failed to run `$_`", interactive => 1 }, $_) for (
@@ -2055,6 +2052,12 @@ EOF
 			"cp -R '../$ENV{CACHE_DIR}/.genesis/kits' .genesis/kits"
 		);
 	}
+
+	my $env = Genesis::Top->new('.')->load_env($ENV{CURRENT_ENV});
+	push(@undefined, grep { !$ENV{$_} }
+		qw/BOSH_ENVIRONMENT BOSH_CA_CERT
+		   BOSH_CLIENT BOSH_CLIENT_SECRET/) unless $env->needs_bosh_create_env;
+	__bail_on_missing_pipeline_environment_variables(@undefined);
 
 	# don't set up a bosh alias if we're a create-env based deploy, no need, no data
 	unless ($env->needs_bosh_create_env) {
