@@ -85,6 +85,11 @@ the v1 embedded in those versions haven't changed.
   Genesis will warn you that you may experience garbled output on non-ascii
   characters.
 
+- You can combine the -C option with the actual environment YAML file, making
+  tab completion easier.  For example, instead of `genesis -C
+  ../another/deployment do myenv.yml -- thing` you can specify it as `genesis
+  -C ../another/deployment/myenv.yml do -- thing`.
+
 # Bug Fixes
 
 - No longer allows mixed usage of `kit.features` and deprecated `kit.subkits`.
