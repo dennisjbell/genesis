@@ -132,8 +132,10 @@ sub create {
 	# target vault and purge secrets that may already exist
 	bail("\n#R{[ERROR]} No vault specified or configured.")
 		unless $env->vault;
-	$env->{secrets_path} = $opts{secrets_path} || $env->_default_secrets_path;
-	$env->purge_secrets() || bail "Cannot continue with existing secrets for this environment";
+	if (! $env->kit->uses_credhub) {
+		$env->{secrets_path} = $opts{secrets_path} || $env->_default_secrets_path;
+		$env->purge_secrets() || bail "Cannot continue with existing secrets for this environment";
+	}
 
 	## initialize the environment
 	if ($env->has_hook('new')) {
@@ -144,7 +146,9 @@ sub create {
 
 	# generate all (missing) secrets ignoring any that exist
 	# from a previous 'new' attempt.
-	$env->add_secrets();
+	if (! $env->kit->uses_credhub) {
+		$env->add_secrets();
+	}
 
 	return $env;
 }
@@ -766,6 +770,12 @@ sub deploy {
 sub add_secrets { # WIP - majorly broken right now.  sorry bout that.
 	my ($self, %opts) = @_;
 
+	#Credhub check
+	if ($self->kit->uses_credhub) {
+		explain "#Yi{Credhub-based kit - no local secrets generation required}";
+		return 1;
+	}
+
 	if ($self->has_hook('secrets')) {
 		$self->run_hook('secrets', action => $opts{recreate} ? 'new' : 'add',
 		                           vault  => $self->secrets_path);
@@ -781,6 +791,11 @@ sub add_secrets { # WIP - majorly broken right now.  sorry bout that.
 sub purge_secrets {
 	my ($self, %opts) = @_;
 
+	#Credhub check
+	if ($self->kit->uses_credhub) {
+		explain "#Yi{Credhub-based kit - no local secrets removal permitted}";
+		return 1;
+	}
 	my @paths = $self->vault->paths("secret/".$self->secrets_path);
 	return 1 unless (scalar(@paths));
 
@@ -802,6 +817,12 @@ sub purge_secrets {
 
 sub check_secrets {
 	my ($self,%opts) = @_;
+
+	#Credhub check
+	if ($self->kit->uses_credhub) {
+		explain "#Yi{Credhub-based kit - no local secrets validation required}";
+		return 1;
+	}
 
 	$opts{indent} ||= ''; # Used when imbedded under another function such as check or deploy
 	if ($self->has_hook('secrets')) {
@@ -904,6 +925,12 @@ sub _check_secret {
 
 sub rotate_secrets {
 	my ($self, %opts) = @_;
+
+	#Credhub check
+	if ($self->kit->uses_credhub) {
+		explain "#Yi{Credhub-based kit - no local secrets rotation allowed}";
+		return 1;
+	}
 
 	if ($self->has_hook('secrets')) {
 		$self->run_hook('secrets', action => 'rotate',
