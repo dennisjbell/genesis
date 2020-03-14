@@ -472,7 +472,7 @@ sub options {
 	GetOptionsFromArray($args, $options,
 		(qw/
 			help|h
-			debug|D
+			debug|D+
 			trace|T+
 			quiet|q
 			cwd|C=s
@@ -484,10 +484,11 @@ sub options {
 
 	usage(0) if $options->{help};
 
-	$ENV{QUIET}         = 'y' if  $options->{quiet};
-	$ENV{GENESIS_DEBUG} = 'y' if  $options->{debug} || envset "DEBUG";
-	$ENV{GENESIS_TRACE} = 'y' if  $options->{trace};
-	$ENV{NOCOLOR}       = 'y' if !delete($options->{color});
+	$ENV{QUIET}          = 'y' if  $options->{quiet};
+	$ENV{GENESIS_DEBUG}  = 'y' if  $options->{debug} || envset "DEBUG";
+	$ENV{GENESIS_TRACE}  = 'y' if  $options->{trace};
+	$ENV{GENESIS_TSTAMP} = 'y' if ($options->{debug} || 0) > 1;
+	$ENV{NOCOLOR}        = 'y' if !delete($options->{color});
 
 	# spruce debugging
 	my $trace = delete($options->{trace}) || 0;
