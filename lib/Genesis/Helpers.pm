@@ -243,14 +243,20 @@ export -f __ip2dec
 
 declare -a __checked_cloud_config
 __checked_cloud_config=( '' )
+__in_cloudconfig_check=''
 cloud_config_needs() {
   local __type=${1:?cloud_config_needs() - must specify a type}; shift
   local __name
-	local __unbound_check=0
-	if [[ $- =~ 'u' ]] ; then
-		set +u
-		__unbound_check=1
-	fi
+  local __unbound_check=0
+  if [[ $- =~ 'u' ]] ; then
+    set +u
+    __unbound_check=1
+  fi
+
+  if [[ -z "$__in_cloudconfig_check" ]] ; then
+    describe "  #C{[Checking cloud config]}"
+    __in_cloudconfig_check=1
+  fi
 
   # Special check for static_ips
   if [[ "${__type}" == "static_ips" ]] ; then
@@ -286,7 +292,10 @@ cloud_config_needs() {
     else
       __cloud_config_error_messages+=( "  $(bullet '√') network '$__network' has sufficient static ips #G{(found $__sum, need $__count)} ")
     fi
-    return
+    if [[ -n "$__in_cloudconfig_check" ]] ; then
+      describe "${__cloud_config_error_messages[@]}"
+      __cloud_config_error_messages=()
+    fi
   fi
 
   # Generic pattern
@@ -316,6 +325,10 @@ cloud_config_needs() {
       fi
     fi
   done
+  if [[ -n "$__in_cloudconfig_check" ]] ; then
+    describe "${__cloud_config_error_messages[@]}"
+    __cloud_config_error_messages=( )
+  fi
 
   [[ "$__unbound_check" = '1' ]] && set -u
 }
@@ -327,8 +340,10 @@ check_cloud_config() {
   # Usage:
   #   check_cloud_config || exit 1  # exit if errors found
   #   check_cloud_config && describe "  cloud config [#G{OK}] # report ok if no errors
-  describe "  #C{[Checking cloud config]}"
-  describe "${__cloud_config_error_messages[@]}"
+  if [[ -z "$__in_cloudconfig_check" ]] ;then
+    describe "  #C{[Checking cloud config]}"
+    describe "${__cloud_config_error_messages[@]}"
+  fi
   if [[ ${__cloud_config_ok} != "yes" ]]; then
     return 1
   fi
@@ -517,16 +532,46 @@ genesis_config_block() {
 	cat<<EOF
 
 genesis:
-  env:          "$GENESIS_ENVIRONMENT"
+  env:                $GENESIS_ENVIRONMENT
 EOF
-	if [[ -n "$GENESIS_SECRETS_PATH" ]] ; then
+	if [[ "$BOSH_ALIAS" != "$GENESIS_ENVIRONMENT" ]] ; then
 		cat <<EOF
-  secrets_path: "$GENESIS_SECRETS_PATH"
+  bosh_env:           $BOSH_ALIAS
 EOF
 	fi
 	if [[ -n "$GENESIS_MIN_VERSION" ]] ; then
 		cat <<EOF
-  min_version:  "$GENESIS_MIN_VERSION"
+  min_version:        $GENESIS_MIN_VERSION
+EOF
+	fi
+	if [[ -n "$GENESIS_SECRETS_SLUG_OVERRIDE" ]] ; then
+		cat <<EOF
+  secrets_path:       $GENESIS_SECRETS_SLUG
+EOF
+	fi
+	if [[ -n "$GENESIS_ENV_ROOT_CA_PATH" ]] ; then
+		cat <<EOF
+  root_ca_path:       $GENESIS_ENV_ROOT_CA_PATH
+EOF
+	fi
+	if [[ -n "$GENESIS_SECRETS_MOUNT_OVERRIDE" ]] ; then
+		cat <<EOF
+  secrets_mount:      $GENESIS_SECRETS_MOUNT
+EOF
+	fi
+	if [[ -n "$GENESIS_EXODUS_MOUNT_OVERRIDE" ]] ; then
+		cat <<EOF
+  exodus_mount:       $GENESIS_EXODUS_MOUNT
+EOF
+	fi
+	if [[ -n "$GENESIS_CI_MOUNT_OVERRIDE" ]] ; then
+		cat <<EOF
+  ci_mount:           $GENESIS_CI_MOUNT
+EOF
+	fi
+	if [[ -n "$GENESIS_CREDHUB_EXODUS_SOURCE_OVERRIDE" ]] ; then
+		cat <<EOF
+  credhub_exodus_env: $GENESIS_CREDHUB_EXODUS_SOURCE_OVERRIDE
 EOF
 	fi
 	echo ""

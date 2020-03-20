@@ -60,7 +60,7 @@ sub glob {
 # has_hook - {{{
 sub has_hook {
 	my ($self, $hook) = @_;
-	debug("checking the kit for a(n) '$hook' hook");
+	trace("checking the kit for a(n) '$hook' hook");
 	return -f $self->path("hooks/$hook");
 }
 
@@ -69,10 +69,10 @@ sub has_hook {
 sub run_hook {
 	my ($self, $hook, %opts) = @_;
 
-	debug("running the kit '$hook' hook");
 	die "No '$hook' hook script found\n"
 		unless $self->has_hook($hook);
 
+	trace ("running the kit '$hook' hook");
 	local %ENV = %ENV;
 	$ENV{GENESIS_KIT_NAME}     = $self->name;
 	$ENV{GENESIS_KIT_VERSION}  = $self->version;
@@ -83,45 +83,15 @@ sub run_hook {
 		                               prereqs subkit/;
 
 	if (grep { $_ eq $hook } qw/new secrets info addon check prereqs blueprint pre-deploy post-deploy/) {
-		# env is REQUIRED
-		bug("The 'env' option to run_hook is required for the '$hook' hook!!")
-			unless $opts{env};
-
-		$ENV{GENESIS_ROOT}         = $opts{env}->path;
-		$ENV{GENESIS_ENVIRONMENT}  = $opts{env}->name;
-		$ENV{GENESIS_TYPE}         = $opts{env}->type;
-		$ENV{GENESIS_TARGET_VAULT} = $ENV{SAFE_TARGET} = $opts{env}->vault->ref;
-		$ENV{GENESIS_VERIFY_VAULT} = $opts{env}->vault->verify || "";
-
-		$ENV{GENESIS_VAULT_PREFIX} = $ENV{GENESIS_SECRETS_PATH} = $opts{env}->secrets_path;
 
 		if ($hook eq "new") {
 			$ENV{GENESIS_MIN_VERSION} = $self->metadata->{genesis_version_min} || ""
 		}
 
-		unless (grep { $_ eq $hook } qw/new prereqs/) {
-			my $credhub_src=$opts{env}->lookup(['genesis.credhub-exodus-env','params.bosh','genesis.env']);
-			my $credhub_path = $credhub_src;
-			if ($credhub_src =~ /\/\w+$/) {
-				$credhub_path  =~ s/\/([^\/]*)$/-$1/;
-			} else {
-				$credhub_src .= "/bosh";
-				$credhub_path .= "-bosh";
-			}
-			$ENV{GENESIS_CREDHUB_EXODUS_SOURCE} = $credhub_src;
-			$ENV{GENESIS_CREDHUB_ROOT}=sprintf("%s/%s-%s", $credhub_path, $opts{env}->name, $opts{env}->type);
-
-			$ENV{GENESIS_REQUESTED_FEATURES} = join(' ', $opts{env}->features);
-			if ($opts{env}->needs_bosh_create_env) {
-				$ENV{GENESIS_USE_CREATE_ENV} = 'yes';
-			} else {
-				my $bosh = Genesis::BOSH->environment_variables(scalar $opts{env}->lookup_bosh_target);
-				for my $var (keys %$bosh) {
-					$ENV{$var} = $bosh->{$var};
-				}
-				$ENV{BOSH_DEPLOYMENT} = sprintf("%s-%s", $opts{env}->name, $opts{env}->type);
-			}
-		}
+		trace ('getting env info');
+		bug("The 'env' option to run_hook is required for the '$hook' hook!!") unless $opts{env};
+		$opts{env}->setup_hook_env_vars($hook);
+		trace ('got env info');
 
 	} elsif ($hook eq 'subkit') {
 		bug("The 'features' option to run_hook is required for the '$hook' hook!!")
@@ -162,21 +132,35 @@ sub run_hook {
 		@args = @{ $opts{features} };
 	}
 
-	chmod 0755, $self->path("hooks/$hook");
+	my $hook_exec = $self->path("hooks/$hook");
+	my $hook_name = $hook;
+	if (envset('GENESIS_TRACE')) {
+		open my $file, '<', $hook_exec;
+		my $firstLine = <$file>;
+		close $file;
+		if ($firstLine =~ /(^#!\s*\/bin\/bash(?:$| .*$))/) {
+			run('(echo "$1"; echo "set -x"; cat "$2") > "$3"', $1, $hook_exec, "$hook_exec-trace");
+			$hook_exec .= '-trace';
+			$hook_name .= '-trace';
+		}
+	}
+	chmod 0755, $hook_exec;
+
 	debug ("Running hook now in ".$self->path);
 	my ($out, $rc) = run({ interactive => scalar $hook =~ m/^(addon|new|info|check|secrets|post-deploy|pre-deploy)$/,
 	                       stderr => '&2' },
 		'cd "$1"; source .helper; hook=$2; shift 2; ./hooks/$hook "$@"',
-		$self->path, $hook, @args);
+		$self->path, $hook_name, @args);
 	debug("the kit '$hook' hook exited $rc");
 
 	if ($hook eq 'new') {
-		if ($rc != 0) {
-			die "Could not create new env $args[1] (in $args[0]): 'new' hook exited $rc\n";
-		}
-		if (! -f "$args[0]/$args[1].yml") {
-			die "Could not create new env $args[1] (in $args[0]): 'new' hook did not create $args[1].yml\n";
-		}
+		bail("#R{[ERROR]} Could not create new env #C{%s} (in %s): 'new' hook exited %d",
+				 $ENV{GENESIS_ENVIRONMENT}, humanize_path($ENV{GENESIS_ROOT}), $rc)
+			unless ($rc == 0);
+
+		bail("#R{[ERROR]} Could not create new env #C{%s} (in %s): 'new' hook did not create #M{%1\$s}",
+				 $ENV{GENESIS_ENVIRONMENT}, humanize_path($ENV{GENESIS_ROOT}))
+			unless -f sprintf("%s/%s.yml", $ENV{GENESIS_ROOT}, $ENV{GENESIS_ENVIRONMENT});
 		return 1;
 	}
 
@@ -240,11 +224,15 @@ sub metadata {
 }
 
 # }}}
-# uses_credhub - does this kit use credhub instead of vault {{{
-sub uses_credhub {
+# secret_store - what secret_store does this kit use ('vault','credhub') {{{
+sub secret_store {
 	my ($self) = @_;
-	return defined($self->metadata->{secret_store}) && $self->metadata->{uses_credhub} eq "credhub";
+	$self->metadata->{secret_store} ? $self->metadata->{secret_store} : 'vault';
 }
+
+# }}}
+# uses_credhub - does this kit use credhub instead of vault {{{
+sub uses_credhub { return $_[0]->secret_store eq "credhub"; }
 
 # }}}
 # feature_compatibility - {{{
@@ -272,9 +260,11 @@ sub check_prereqs {
 	return 1 unless $min && semver($min);
 
 	if (!semver($Genesis::VERSION)) {
-		error("#Y{WARNING:} Using a development version of Genesis.");
-		error("Cannot determine if it meets or exceeds the minimum version");
-		error("requirement (v$min) for $id.");
+		unless (under_test && !envset 'GENESIS_TESTING_DEV_VERSION_DETECTION') {
+			error("#Y{WARNING:} Using a development version of Genesis.");
+			error("Cannot determine if it meets or exceeds the minimum version");
+			error("requirement (v$min) for $id.");
+		}
 		return 1;
 	}
 
@@ -291,7 +281,7 @@ sub check_prereqs {
 }
 
 # }}}
-# source_yaml_files - {{{
+# source_yaml_files - list the yaml files that will be merged in order for manifest {{{
 sub source_yaml_files {
 	my ($self, $env, $absolute) = @_;
 
@@ -311,6 +301,77 @@ sub source_yaml_files {
 
 	return @files;
 }
+# }}}
+# dereferenced_metadata - fill in kit metadata with source parameters {{{
+sub dereferenced_metadata {
+	my ($self, $lookup, $fatal) = @_;
+	unless (defined($self->{__deref_metadata})) {
+		$self->{__deref_cache} = {};
+		$self->{__deref_metadata} = $self->_deref_metadata($self->metadata,$lookup);
+	}
+	if ($fatal && scalar @{$self->{__deref_miss}||[]}) {
+		bail "Could not dereference the following values specified in the metadata:\n  - ".
+		     join("\n  - ", @{$self->{__deref_miss}});
+	}
+	$self->{__deref_metadata};
+}
+
+# }}}
+# }}}
+
+### Private Methods {{{
+
+# _deref_metadata - recursively dereference metadata structure {{
+sub _deref_metadata {
+	my ($self,$metadata, $lookup) = @_;
+	if (ref $metadata eq 'ARRAY') {
+		return [
+			(map {$self->_deref_metadata($_,$lookup)} @$metadata)
+		];
+	} elsif (ref $metadata eq 'HASH') {
+		my %h = ();
+		$h{$_} = $self->_deref_metadata($metadata->{$_},$lookup) for keys %$metadata;
+		return \%h;
+	} elsif (ref(\$metadata) eq 'SCALAR' && defined($metadata)) {
+		$metadata =~ s/\$\{(.*?)(?:\|\|(.*?))?\}/$self->_dereference_param($lookup, $1, $2)/ge;
+		return $metadata;
+	} else {
+		return $metadata;
+	}
+}
+
+# }}}
+# _dereference_param - derefernce a referenced parameter {{{
+sub _dereference_param {
+	my ($self,$lookup,$key,$default) = @_;
+	trace "Dereferencing kit param: %s [default: %s]", $key, defined($default) ? $default : 'null';
+	if (defined(($self->{__deref_cache}||{})->{$key})) {
+		trace "Genesis::Kit->_dereference_param: cache hit '%s'=>'%s'", $key, $self->{__deref_cache}{$key};
+		return $self->{__deref_cache}{$key};
+	}
+	if ($key =~ m/^maybe:/) {
+		$key =~ s/^maybe://;
+		$default = "";
+	}
+	my $val = $lookup->($key, $default);
+	while (defined($val) && $val =~ /\(\( grab \s*(\S*?)(?:\s*\|\|\s*(.*?))?\s*\)\)/) {
+		$key = $1;
+		my $remainder = $2;
+		$remainder =~ /^"([^"]*)"$/;
+		$default = $1 if defined($1);
+		trace "Dereferencing kit param [intermediary]: %s [default: %s]", $key, defined($default) ? $default : 'null';
+		$val = $lookup->($key, $default);
+		$val = "(( grab $remainder ))" if $remainder && !$val;
+	}
+	if (!defined($val)) {
+		push @{($self->{__deref_miss}||=[])}, $key;
+		return "\${$key}"
+	}
+	trace "Dereference: got %s", $val;
+	($self->{__deref_cache}||={})->{$key} = $val;
+	return $val; # TODO: maybe change unquoted ~ to undef, and remove quotes from default
+}
+
 # }}}
 # }}}
 

@@ -71,11 +71,12 @@ sub process_params {
 	$opts{kit}     = $self->name;
 	$opts{version} = $self->version;
 	$opts{params}  = $self->metadata->{params} || {};
+	$opts{secrets_base} = $env->secrets_base;
 
 	my @answers;
 	my $resolveable_params = {
-		"params.vault_prefix" => $opts{vault_prefix}, # for backwards compatibility
-		"params.vault" => $opts{vault_prefix},
+		"params.vault_prefix" => $env->secrets_slug, # for backwards compatibility
+		"params.vault" => $env->secrets_slug,
 		"params.env" => $env->name,
 	};
 	for my $feature ("base", @{$opts{features}}) {
@@ -103,7 +104,7 @@ sub process_params {
 				if ($q->{param}) {
 					print csprintf("#y{Required parameter:} #W{$q->{param}}\n\n");
 				} else {
-					$vault_path = "secret/$opts{vault_prefix}/$q->{vault}";
+					$vault_path = "$opts{secrets_base}$q->{vault}";
 					print csprintf("#y{Secret data required} -- will be stored in Vault under #W{$vault_path}\n\n");
 				}
 				chomp $q->{description};
@@ -222,163 +223,6 @@ sub dereference_params {
 	$cmd =~ s/\$\{(.*?)\}/dereference_param($env, $1)/ge;
 	return $cmd;
 }
-sub safe_commands {
-	my ($self, $creds, %options) = @_;
-	my @cmds;
-	my $force_rotate = ($options{scope}||'') eq 'force';
-	my $missing_only = ($options{scope}||'') eq 'add';
-	for my $path (sort keys %$creds) {
-		if (! ref $creds->{$path}) {
-			my $cmd = $creds->{$path};
-			$cmd = dereference_params($cmd, $options{env});
-
-			if ($cmd =~ m/^(ssh|rsa)\s+(\d+)(\s+fixed)?$/) {
-				my $safe = [$1, $2, "secret/$options{prefix}/$path"];
-				push @$safe, "--no-clobber", "--quiet" if ($3 && !$force_rotate) || $missing_only;
-				push @cmds, $safe;
-
-			} elsif ($cmd =~ m/^dhparams?\s+(\d+)(\s+fixed)?$/) {
-				my $safe = ['dhparam', $1, "secret/$options{prefix}/$path"];
-				push @$safe, "--no-clobber", "--quiet" if ($2 && !$force_rotate) || $missing_only;
-				push @cmds, $safe;
-
-			} else {
-				die "unrecognized credential type: `$cmd'\n";
-			}
-		} elsif ('HASH' eq ref $creds->{$path}) {
-			for my $attr (sort keys %{$creds->{$path}}) {
-				my $cmd = $creds->{$path}{$attr};
-				$cmd = dereference_params($cmd, $options{env});
-
-				if ($cmd =~ m/^random\s+(\d+)(\s+fmt\s+(\S+)(\s+at\s+(\S+))?)?(\s+allowed-chars\s+(\S+))?(\s+fixed)?$/) {
-					my ($len, $format, $destination, $valid_chars, $fixed) = ($1, $3, $5, $7, $8);
-					my @allowed_chars = ();
-					if ($valid_chars) {
-						@allowed_chars = ("--policy", $valid_chars);
-					}
-					my $safe = ['gen', $len, @allowed_chars, "secret/$options{prefix}/$path", $attr];
-					push @$safe, "--no-clobber", "--quiet" if ($fixed && !$force_rotate) || $missing_only;
-					push @cmds, $safe;
-					if ($format) {
-						$destination ||= "$attr-$format";
-						my $safe = ["fmt", $format , "secret/$options{prefix}/$path", $attr, $destination];
-						push @$safe, "--no-clobber", "--quiet" if ($fixed && !$force_rotate) || $missing_only;
-						push @cmds, $safe;
-					}
-
-				} else {
-					die "unrecognized credential type: `$cmd'\n";
-				}
-			}
-		} else {
-			$self->kit_bug("Unrecognized datastructure for $path.!!");
-		}
-	}
-
-	return @cmds;
-}
-
-sub cert_commands {
-	my ($certs, %options) = @_;
-	my @cmds;
-	my $force_rotate = ($options{scope}||'') eq 'force';
-	my $missing_only = ($options{scope}||'') eq 'add';
-	for my $path (sort keys %$certs) {
-		my $rand = sprintf("%09d", rand(1000000000));
-		my $ttl = "1y";
-		my @names = ('--name', "ca.n$rand.$path");
-		if (defined($certs->{$path}{"ca"})) {
-			$ttl = $certs->{$path}{"ca"}{valid_for} || $ttl;
-			push(@names, '--name', $_)
-				for (@{ $certs->{$path}{"ca"}{names} || [] });
-		}
-		my @cmd = (
-			"x509",
-			"issue",
-			"secret/$options{prefix}/$path/ca",
-			@names,
-			"--ttl" , $ttl,
-			"--ca");
-		push @cmd, "--no-clobber", "--quiet" if !$force_rotate; # All CA certs are considered kept
-		push @cmds, \@cmd;
-
-		for my $cert (sort keys %{$certs->{$path}}) {
-			next if $cert eq "ca";
-			my $c = $certs->{$path}{$cert};
-
-			die "Required 'names' value missing for cert at $path/$cert.\n" unless $c->{names}[0];
-			my $cn = $c->{names}[0];
-			$c->{valid_for} ||= "1y";
-
-			my @name_flags = map {( "--name", $_ )} grep { $_ } map { dereference_params($_, $options{env}) } @{$c->{names}};
-			my @cmd = (
-				"x509",
-				"issue",
-				"secret/$options{prefix}/$path/$cert",
-				"--ttl", $c->{valid_for},
-				@name_flags,
-				"--signed-by", "secret/$options{prefix}/$path/ca");
-			push @cmd, "--no-clobber", "--quiet" if $missing_only || $c->{fixed};
-			push @cmds, \@cmd;
-		}
-	}
-	return @cmds;
-}
-
-# generate (and optionally rotate) credentials.
-#
-## just rotate credentials
-# vaultify_secrets $kit_metadata,
-#                  target       => "my-vault",
-#                  env          => "us-east-sandbox",
-#                  prefix       => "us/east/sandbox",
-#                  scope        => 'rotate'; # or scope => '' or undef
-#
-## generate all credentials (including 'fixed' creds)
-# vaultify_secrets $kit_metadata,
-#                  target       => "my-vault",
-#                  env          => "us-east-sandbox",
-#                  prefix       => "us/east/sandbox",
-#                  scope        => 'force';
-#
-## generate only missing credentials
-# vaultify_secrets $kit_metadata,
-#                  target       => "my-vault",
-#                  env          => "us-east-sandbox",
-#                  prefix       => "us/east/sandbox",
-#                  scope        => 'add';
-#
-sub vaultify_secrets {
-	my ($self, %options) = @_;
-	my $env = $options{env} or die "vaultify_secrets() was not given an 'env' option.\n";
-	my $meta = $self->metadata;
-
-	my $creds = active_credentials($meta, $options{features} || []);
-	if (%$creds) {
-		explain(" - auto-generating credentials (in secret/$options{prefix})...");
-		for (safe_commands $self, $creds, %options) {
-			$env->vault->query(
-				{ interactive => 1, onfailure => "Failure autogenerating credentials." },
-				@$_
-			);
-		}
-	} else {
-		explain(" - no credentials need to be generated.");
-	}
-
-	my $certs = active_certificates($meta, $options{features} || []);
-	if (%$certs) {
-		explain(" - auto-generating certificates (in secret/$options{prefix})...");
-		for (cert_commands $certs, %options) {
-			$env->vault->query(
-				{ interactive => 1, onfailure => "Failure autogenerating certificates." },
-				@$_
-			);
-		}
-	} else {
-		explain(" - no certificates need to be generated.");
-	}
-}
 
 sub run_param_hook {
 	my ($env,$params,@features) = @_;
@@ -412,6 +256,8 @@ sub run_param_hook {
 
 sub new_environment {
 	my ($self) = @_;
+	$self->setup_hook_env_vars('new');
+
 	my ($k, $kit, $version) = ($self->{kit}, $self->{kit}->name, $self->{kit}->version);
 	my $meta = $k->metadata;
 
@@ -420,7 +266,6 @@ sub new_environment {
 	my @features = prompt_for_env_features($self);
 	my $params = process_params($k,
 		env          => $self,
-		vault_prefix => $self->{secrets_path},
 		features     => \@features,
 	);
 	$params = run_param_hook($self, $params, @features);
@@ -458,28 +303,42 @@ sub new_environment {
 	print $fh "  features:\n";
 	print $fh "    - (( replace ))\n";
 	print $fh "    - $_\n" foreach (@features);
-	print $fh <<EOF;
 
-params:
-  env:   $self->{name}
-  vault: $self->{secrets_path}
-EOF
-	if (defined($ENV{GENESIS_BOSH_ENVIRONMENT})) {
-		print $fh <<EOF;
-  bosh:  $ENV{GENESIS_BOSH_ENVIRONMENT}
-EOF
-	}
+	# genesis block
+	my $genesis_out = '';
+	$genesis_out .= sprintf "  env:                %s\n",$self->name;
+	$genesis_out .= sprintf "  bosh_env:           %s\n", $ENV{BOSH_ALIAS}
+		if $ENV{BOSH_ALIAS} && ($ENV{BOSH_ALIAS} ne $ENV{GENESIS_ENVIRONMENT});
+	$genesis_out .= sprintf "  min_version:        %s\n",$ENV{GENESIS_MIN_VERSION}
+		if $ENV{GENESIS_MIN_VERSION};
+	$genesis_out .= sprintf "  secrets_path:       %s\n",$ENV{GENESIS_SECRETS_SLUG}
+		if $ENV{GENESIS_SECRETS_SLUG_OVERRIDE};
+	$genesis_out .= sprintf "  root_ca_path:       %s\n",$ENV{GENESIS_ENV_ROOT_CA_PATH}
+		if $ENV{GENESIS_ENV_ROOT_CA_PATH};
+	$genesis_out .= sprintf "  secrets_mount:      %s\n",$ENV{GENESIS_SECRETS_MOUNT}
+		if $ENV{GENESIS_SECRETS_MOUNT_OVERRIDE};
+	$genesis_out .= sprintf "  exodus_mount:       %s\n",$ENV{GENESIS_EXODUS_MOUNT}
+		if $ENV{GENESIS_EXODUS_MOUNT_OVERRIDE};
+	$genesis_out .= sprintf "  ci_mount:           %s\n",$ENV{GENESIS_CI_MOUNT}
+		if $ENV{GENESIS_CI_MOUNT_OVERRIDE};
+	$genesis_out .= sprintf "  credhub_exodus_env: %s\n",$ENV{GENESIS_CREDHUB_EXODUS_SOURCE_OVERRIDE}
+		if $ENV{GENESIS_CREDHUB_EXODUS_SOURCE_OVERRIDE};
 
+	my $overpad = [sort {length($a) <=> length($b)} ($genesis_out =~ /:\s+/g)]->[0];
+	$genesis_out =~ s/$overpad/: /g;
+	print  $fh "\ngenesis:\n$genesis_out";
+
+	my $params_out = '';
 	for my $param (@$params) {
-		print $fh "\n";
+		$params_out .= "\n";
 		my $indent = "  # ";
 		if (defined $param->{comment}) {
 			for my $line (split /\n/, $param->{comment}) {
-				print $fh "${indent}$line\n";
+				$params_out .= "${indent}$line\n";
 			}
 		}
 		if (defined $param->{example}) {
-			print $fh "${indent}(e.g. $param->{example})\n";
+			$params_out .= "${indent}(e.g. $param->{example})\n";
 		}
 
 		$indent = $param->{default} ? "  #" : "  ";
@@ -490,7 +349,7 @@ EOF
 			# this helps us not run into issues resolving the operator
 			my $v = $val->{$k};
 			if (defined $v && ! ref($v) && $v =~ m/^\(\(.*\)\)$/) {
-				print $fh "${indent}$k: $v\n";
+				$params_out .= "${indent}$k: $v\n";
 				next;
 			}
 			my $tmpdir = workdir;
@@ -503,15 +362,17 @@ EOF
 				chomp $line;
 				next unless $line;
 				next if $line eq "---";
-				print $fh "${indent}$line\n";
+				$params_out .= "${indent}$line\n";
 			}
 			close $spruce;
 			die "Unable to convert JSON to spruce-compatible YAML. This is a bug\n"
 				if $? >> 8;
 		}
 	}
+	$params_out ||= " {}\n";
+	print $fh "\nparams:$params_out";
 	close $fh;
-	explain("Created #C{$file} environment file");
+	explain("Created #C{$file} environment file\n");
 }
 
 sub prompt_for_env_features {
@@ -553,44 +414,6 @@ sub prompt_for_env_features {
 	}
 	Genesis::Legacy::validate_features($self->{kit}, @features);
 	return @features;
-}
-
-sub active_credentials {
-	my ($meta, $features) = @_;
-
-	my $active = {};
-	for my $sub (('base', @$features)) {
-		next unless $meta->{credentials}{$sub};
-		for my $path (keys %{ $meta->{credentials}{$sub} }) {
-			if (exists $active->{$path} && ref $meta->{credentials}{$sub}{$path}) {
-				for my $k (keys %{ $meta->{credentials}{$sub}{$path} }) {
-					$active->{$path}{$k} = $meta->{credentials}{$sub}{$path}{$k};
-				}
-			} else {
-				$active->{$path} = $meta->{credentials}{$sub}{$path};
-			}
-		}
-	}
-	return $active;
-}
-
-sub active_certificates {
-	my ($meta, $features) = @_;
-
-	my $active = {};
-	for my $sub (('base', @$features)) {
-		next unless $meta->{certificates}{$sub};
-		for my $path (keys %{ $meta->{certificates}{$sub} }) {
-			if (exists $active->{$path} && ref $meta->{certificates}{$sub}{path}) {
-				for my $k (keys %{ $meta->{certificates}{$sub}{$path} }) {
-					$active->{$path}{$k} = $meta->{certificates}{$sub}{$path}{$k};
-				}
-			} else {
-				$active->{$path} = $meta->{certificates}{$sub}{$path};
-			}
-		}
-	}
-	return $active;
 }
 
 sub resolve_params_ref {
