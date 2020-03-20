@@ -596,7 +596,7 @@ sub parse_kit_secret_plans {
 
 	# Sort the plans in order of application (check for cyclical ca relations)
 	my $groups = {};
-	push(@{$groups->{$plans->{$_}{type}} ||= []}, $_) for (sort CORE::keys %$plans);
+	push(@{$groups->{$plans->{$_}{type}} ||= []}, $_) for (sort(CORE::keys(%$plans)));
 
 	my @ordered_plans = _process_x509_plans(
 		$plans,
@@ -605,7 +605,7 @@ sub parse_kit_secret_plans {
 		$opts{validate});
 
 	# Add in all the other types that don't require prerequesites
-	for my $type (sort CORE::keys %$groups) {
+	for my $type (sort(CORE::keys %$groups)) {
 		for my $path (sort @{$groups->{$type}}) {
 			my $ok = 1;
 			if ($opts{validate}) {
@@ -893,7 +893,7 @@ sub _process_x509_plans {
 	}
 
 	# Find unresolved signage paths
-	for (grep {$plans->{$_}{type} eq 'x509' && !$plans->{$_}{__processed}} sort CORE::keys %$plans) {
+	for (grep {$plans->{$_}{type} eq 'x509' && !$plans->{$_}{__processed}} sort(CORE::keys %$plans)) {
 		$plans->{$_}{type} = "error";
 		$plans->{$_}{error} = "Could not find associated signing CA";
 		push(@ordered_plans, $plans->{$_})
@@ -949,7 +949,7 @@ sub _sign_x509_plans {
 # _next_signer - determine next signer so none are orphaned {{{
 sub _next_signer {
 	my $signers = shift;
-	my @available_targets = grep {scalar(@{$signers->{$_}})} sort CORE::keys %$signers;
+	my @available_targets = grep {scalar(@{$signers->{$_}})} sort(CORE::keys %$signers);
 	while (@available_targets) {
 		my $candidate = shift @available_targets;
 		# Dont use a signer if its signed by a remaining signer
@@ -991,7 +991,7 @@ sub _validate_x509_plan {
 				my %valid_keys = map {$_, 1} _x509_key_usage();
 				my @invalid_keys = grep {!$valid_keys{$_}} @{$cert{usage}};
 				$err .= sprintf("\n- Invalid usage argument - unknown usage keys: '%s'\n  Valid keys are: '%s'",
-				                join("', '", sort @invalid_keys), join("', '", sort CORE::keys %valid_keys))
+				                join("', '", sort @invalid_keys), join("', '", sort(CORE::keys %valid_keys)))
 					if (@invalid_keys);
 			}
 		} else {

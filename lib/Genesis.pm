@@ -158,7 +158,9 @@ sub csprintf {
 	return '' unless $fmt;
 	my $s;
 	eval {
-		use warnings FATAL => qw/missing redundant uninitialized/;
+		our @trap_warnings = qw/uninitialized/;
+		push @trap_warnings, qw/missing redundant/ if $^V ge v5.21.0;
+		use warnings FATAL => @trap_warnings;
 		$s = sprintf($fmt, @args);
 	};
 	if ($@) {
