@@ -155,10 +155,14 @@ EOF
 	$ENV{GENESIS_BOSH_COMMAND} = "$tmp/fake-bosh";
 }
 
-sub fake_bosh_directors {
+sub write_bosh_config {
+	my $orig_home=`echo ~\$USER`;
+	if ($ENV{HOME} eq $orig_home) {
+		die 'Refusing to over-write real .bosh/config!';
+	}
 	my $config="environments:\n";
-	my @directors = ();
-	for my $info (@_) {
+	my @args = (@_);
+	for my $info (@args) {
 		if (ref($info) ne "HASH") {
 			$info = {
 				alias => $info
@@ -177,6 +181,22 @@ sub fake_bosh_directors {
 		           "  username: ".($info->{username} || 'noname')."\n".
 		           "  password: ".($info->{password} || 'nopassword')."\n";
 
+	}
+	mkdir_or_fail("$ENV{HOME}/.bosh");
+	put_file( "$ENV{HOME}/.bosh/config",$config);
+}
+
+
+sub fake_bosh_directors {
+	write_bosh_config(@_);
+	my @directors = ();
+	my @args = (@_);
+	for my $info (@args) {
+		if (ref($info) ne "HASH") {
+			$info = {
+				alias => $info
+			};
+		}
 		push @directors, Test::TCP->new(
 			listen => 0,
 			auto_start => 1,
@@ -206,8 +226,6 @@ sub fake_bosh_directors {
 			}
 		);
 	}
-	mkdir_or_fail("$ENV{HOME}/.bosh");
-	put_file( "$ENV{HOME}/.bosh/config",$config);
 	return @directors;
 }
 sub fake_bosh_director {
@@ -400,6 +418,12 @@ sub output_ok($$;$) {
 	}
 	pass $msg;
 	return 0;
+}
+
+sub quietly(&) {
+	local *STDERR;
+	open(STDERR, '>', '/dev/null') or die "failed to quiet stderr!";
+	return $_[0]->();
 }
 
 sub bosh2_cli_ok {

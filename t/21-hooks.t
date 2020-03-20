@@ -180,24 +180,24 @@ subtest 'new hook' => sub {
 
 	my $vault = Genesis::Vault::default();
 
+	write_bosh_config $us_west_1_prod->name, $snw_lab_dev->name;
+
 	ok $simple->run_hook('new', env => $us_west_1_prod),
 	   "[simple] running the 'new' hook should succeed";
 
 	ok -f "$root/us-west-1-prod.yml",
 	   "[simple] the 'new' hook should create the env yaml file";
 
-	yaml_is get_file("$root/us-west-1-prod.yml"), <<EOF,
+	yaml_is <<EOF, get_file("$root/us-west-1-prod.yml"),
 kit:
   name:     dev
   version:  latest
   features: []
 genesis:
-  env:   us-west-1-prod
+  env:         us-west-1-prod
   min_version: "2.6.0"
-  secrets_path: us/west/1/prod/thing
 EOF
 		"[simple] the 'new' hook should populate the env yaml file properly";
-
 
 	ok $fancy->run_hook('new', env => $snw_lab_dev),
 	   "[fancy] running the 'new' hook should succeed";
@@ -205,7 +205,7 @@ EOF
 	ok -f "$root/snw-lab-dev.yml",
 	   "[fancy] the 'new' hook should create the env yaml file";
 
-	yaml_is get_file("$root/snw-lab-dev.yml"), <<EOF,
+	yaml_is <<EOF, get_file("$root/snw-lab-dev.yml"),
 kit:
   name:     dev
   version:  latest
@@ -213,7 +213,6 @@ kit:
 genesis:
   env: snw-lab-dev
   min_version: "2.6.0"
-  secrets_path: snw/lab/dev/thing
 params:
   GENESIS_KIT_NAME:     dev
   GENESIS_KIT_VERSION:  latest
@@ -232,9 +231,14 @@ EOF
 
 	{
 		local $ENV{HOOK_SHOULD_FAIL} = 'yes';
+		#local $ENV{HOME}='/Users/dbell'; use Pry; pry;
+		my $env =  Genesis::Env->new(top => $top, name => 'env-should-fail', vault => $vault);
+		$env->{__params} = {
+			genesis => {env => $env->name} # compensate for not using Genesis::Env#create
+		};
+		
 		throws_ok {
-			$fancy->run_hook('new',
-				env => Genesis::Env->new(top => $top, name => 'env-should-fail', vault => $vault));
+			$fancy->run_hook('new', env => $env);
 		} qr/could not create/i;
 
 		ok ! -f "$root/env-should-fail.yml",
@@ -243,9 +247,12 @@ EOF
 
 	{
 		local $ENV{HOOK_SHOULD_CREATE_ENV_FILE} = 'no';
+		my $env = Genesis::Env->new(top => $top, name => 'env-should-fail', vault => $vault);
+		$env->{__params} = {
+			genesis => {env => $env->name} # compensate for not using Genesis::Env#create
+		};
 		throws_ok {
-			$fancy->run_hook('new',
-				env => Genesis::Env->new(top => $top, name => 'env-should-fail', vault => $vault));
+			$fancy->run_hook('new', env => $env );
 		} qr/could not create/i;
 
 		ok ! -f "$root/env-should-fail.yml",
