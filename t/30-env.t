@@ -924,7 +924,7 @@ kit:
     - bonus
 
 genesis:
-  env:                far-fetched
+  env:           far-fetched
 
 params:
   static: junk

@@ -101,11 +101,11 @@ kit:
     - shield
 
 genesis:
-  env:                generate-full-3
-  bosh_env:           master-bosh
-  min_version:        2.7.0
-  secrets_path:       super-prod
-  secrets_mount:      /secret/genesis-stuff/
+  env:           generate-full-3
+  bosh_env:      master-bosh
+  min_version:   2.7.0
+  secrets_path:  super-prod
+  secrets_mount: /secret/genesis-stuff/
 
 params: {}
 

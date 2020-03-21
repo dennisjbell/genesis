@@ -275,8 +275,8 @@ sub setup_hook_env_vars {
 	);
 
 	my $credhub_path = $credhub_src;
-	$ENV{GENESIS_CREDHUB_EXODUS_SOURCE_OVERRIDE} =
-		($hook eq 'new' && ($credhub_src_key || "") eq 'genesis.credhub-exodus-env') ?
+	$ENV{GENESIS_CREDHUB_ENV_OVERRIDE} =
+		($hook eq 'new' && ($credhub_src_key || "") eq 'genesis.credhub_env') ?
 		$credhub_src : "";
 	if ($credhub_src =~ /\/\w+$/) {
 		$credhub_path  =~ s/\/([^\/]*)$/-$1/;
@@ -284,8 +284,8 @@ sub setup_hook_env_vars {
 		$credhub_src .= "/bosh";
 		$credhub_path .= "-bosh";
 	}
-	$ENV{GENESIS_CREDHUB_EXODUS_SOURCE} = $credhub_src;
-	$ENV{GENESIS_CREDHUB_ROOT}=sprintf("%s/%s-%s", $credhub_path, $self->name, $self->type);
+	$ENV{GENESIS_CREDHUB_ENV} = $credhub_src;
+	$ENV{GENESIS_CREDHUB_ROOT}=sprintf("%s/%s-%s", $credhub_path, $self->name, $self->type); # FIXME: This should be the bosh_path, but that is synonymous with credhub_path in most circumstances
 
 	unless (grep { $_ eq $hook } qw/new prereqs/) {
 		$ENV{GENESIS_REQUESTED_FEATURES} = join(' ', $self->features);

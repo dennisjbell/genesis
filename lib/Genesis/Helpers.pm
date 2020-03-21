@@ -532,46 +532,46 @@ genesis_config_block() {
 	cat<<EOF
 
 genesis:
-  env:                $GENESIS_ENVIRONMENT
+  env:           $GENESIS_ENVIRONMENT
 EOF
 	if [[ "$BOSH_ALIAS" != "$GENESIS_ENVIRONMENT" ]] ; then
 		cat <<EOF
-  bosh_env:           $BOSH_ALIAS
+  bosh_env:      $BOSH_ALIAS
+EOF
+	fi
+	if [[ -n "$GENESIS_CREDHUB_ENV_OVERRIDE" ]] ; then
+		cat <<EOF
+  credhub_env:   $GENESIS_CREDHUB_ENV_OVERRIDE
 EOF
 	fi
 	if [[ -n "$GENESIS_MIN_VERSION" ]] ; then
 		cat <<EOF
-  min_version:        $GENESIS_MIN_VERSION
+  min_version:   $GENESIS_MIN_VERSION
 EOF
 	fi
 	if [[ -n "$GENESIS_SECRETS_SLUG_OVERRIDE" ]] ; then
 		cat <<EOF
-  secrets_path:       $GENESIS_SECRETS_SLUG
+  secrets_path:  $GENESIS_SECRETS_SLUG
 EOF
 	fi
 	if [[ -n "$GENESIS_ENV_ROOT_CA_PATH" ]] ; then
 		cat <<EOF
-  root_ca_path:       $GENESIS_ENV_ROOT_CA_PATH
+  root_ca_path:  $GENESIS_ENV_ROOT_CA_PATH
 EOF
 	fi
 	if [[ -n "$GENESIS_SECRETS_MOUNT_OVERRIDE" ]] ; then
 		cat <<EOF
-  secrets_mount:      $GENESIS_SECRETS_MOUNT
+  secrets_mount: $GENESIS_SECRETS_MOUNT
 EOF
 	fi
 	if [[ -n "$GENESIS_EXODUS_MOUNT_OVERRIDE" ]] ; then
 		cat <<EOF
-  exodus_mount:       $GENESIS_EXODUS_MOUNT
+  exodus_mount:  $GENESIS_EXODUS_MOUNT
 EOF
 	fi
 	if [[ -n "$GENESIS_CI_MOUNT_OVERRIDE" ]] ; then
 		cat <<EOF
-  ci_mount:           $GENESIS_CI_MOUNT
-EOF
-	fi
-	if [[ -n "$GENESIS_CREDHUB_EXODUS_SOURCE_OVERRIDE" ]] ; then
-		cat <<EOF
-  credhub_exodus_env: $GENESIS_CREDHUB_EXODUS_SOURCE_OVERRIDE
+  ci_mount:      $GENESIS_CI_MOUNT
 EOF
 	fi
 	echo ""
@@ -612,7 +612,7 @@ credhub() {
 	__old_home="$HOME"
 	if [[ ! -d $__tmpdir ]] ; then
 		mkdir -p $__tmpdir
-		__exodus="$(safe get secret/exodus/$GENESIS_CREDHUB_EXODUS_SOURCE | spruce json | jq -r .)"
+		__exodus="$(safe get secret/exodus/$GENESIS_CREDHUB_ENV | spruce json | jq -r .)"
 		__bosh_ca_cert="$(echo "$__exodus" | jq -r '.ca_cert')"
 		__ch_ca_cert="$(echo "$__exodus"   | jq -r '.credhub_ca_cert')"
 		__ch_pw="$(echo "$__exodus"        | jq -r '.credhub_password')"

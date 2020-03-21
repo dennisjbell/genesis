@@ -306,23 +306,23 @@ sub new_environment {
 
 	# genesis block
 	my $genesis_out = '';
-	$genesis_out .= sprintf "  env:                %s\n",$self->name;
-	$genesis_out .= sprintf "  bosh_env:           %s\n", $ENV{BOSH_ALIAS}
+	$genesis_out .= sprintf "  env:           %s\n",$self->name;
+	$genesis_out .= sprintf "  bosh_env:      %s\n", $ENV{BOSH_ALIAS}
 		if $ENV{BOSH_ALIAS} && ($ENV{BOSH_ALIAS} ne $ENV{GENESIS_ENVIRONMENT});
-	$genesis_out .= sprintf "  min_version:        %s\n",$ENV{GENESIS_MIN_VERSION}
+	$genesis_out .= sprintf "  credhub_env:   %s\n",$ENV{GENESIS_CREDHUB_ENV_OVERRIDE}
+		if $ENV{GENESIS_CREDHUB_ENV_OVERRIDE};
+	$genesis_out .= sprintf "  min_version:   %s\n",$ENV{GENESIS_MIN_VERSION}
 		if $ENV{GENESIS_MIN_VERSION};
-	$genesis_out .= sprintf "  secrets_path:       %s\n",$ENV{GENESIS_SECRETS_SLUG}
+	$genesis_out .= sprintf "  secrets_path:  %s\n",$ENV{GENESIS_SECRETS_SLUG}
 		if $ENV{GENESIS_SECRETS_SLUG_OVERRIDE};
-	$genesis_out .= sprintf "  root_ca_path:       %s\n",$ENV{GENESIS_ENV_ROOT_CA_PATH}
+	$genesis_out .= sprintf "  root_ca_path:  %s\n",$ENV{GENESIS_ENV_ROOT_CA_PATH}
 		if $ENV{GENESIS_ENV_ROOT_CA_PATH};
-	$genesis_out .= sprintf "  secrets_mount:      %s\n",$ENV{GENESIS_SECRETS_MOUNT}
+	$genesis_out .= sprintf "  secrets_mount: %s\n",$ENV{GENESIS_SECRETS_MOUNT}
 		if $ENV{GENESIS_SECRETS_MOUNT_OVERRIDE};
-	$genesis_out .= sprintf "  exodus_mount:       %s\n",$ENV{GENESIS_EXODUS_MOUNT}
+	$genesis_out .= sprintf "  exodus_mount:  %s\n",$ENV{GENESIS_EXODUS_MOUNT}
 		if $ENV{GENESIS_EXODUS_MOUNT_OVERRIDE};
-	$genesis_out .= sprintf "  ci_mount:           %s\n",$ENV{GENESIS_CI_MOUNT}
+	$genesis_out .= sprintf "  ci_mount:      %s\n",$ENV{GENESIS_CI_MOUNT}
 		if $ENV{GENESIS_CI_MOUNT_OVERRIDE};
-	$genesis_out .= sprintf "  credhub_exodus_env: %s\n",$ENV{GENESIS_CREDHUB_EXODUS_SOURCE_OVERRIDE}
-		if $ENV{GENESIS_CREDHUB_EXODUS_SOURCE_OVERRIDE};
 
 	my $overpad = [sort {length($a) <=> length($b)} ($genesis_out =~ /:\s+/g)]->[0];
 	$genesis_out =~ s/$overpad/: /g;
