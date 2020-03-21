@@ -224,29 +224,31 @@ Completed - Duration: XXX seconds [3 recreated/3 skipped/0 errors]
 
 EOF
 
-  my ($secrets_new, $err2) = $env->vault->all_secrets_for($env);
-  my (@different);
-  for my $secret_path (@secret_paths) {
-    my ($path, $key) = @$secret_path;
-    push @different, join(":", $path, $key) if ($secrets_old->{$path}{$key} ne $secrets_new->{$path}{$key});
-  }
-  my @expected = qw(
-    secret/genesis-2.7.0/deployments/dev/azure/us1/secondary/ca:certificate
-    secret/genesis-2.7.0/deployments/dev/azure/us1/secondary/ca:key
-    secret/genesis-2.7.0/deployments/dev/azure/us1/secondary/ca:crl
-    secret/genesis-2.7.0/deployments/dev/azure/us1/secondary/ca:serial
-    secret/genesis-2.7.0/deployments/dev/azure/us1/secondary/ca:combined
-    secret/genesis-2.7.0/deployments/dev/azure/us1/passwords:alt
-    secret/genesis-2.7.0/deployments/dev/azure/us1/passwords:alt-base64
-    secret/genesis-2.7.0/deployments/dev/azure/us1/passwords:uncrypted
-    secret/genesis-2.7.0/deployments/dev/azure/us1/passwords:crypted
-  );
-  cmp_deeply(\@different, bag(@expected), "Only the expected secrets changed");
+	my ($secrets_new, $err2) = $env->vault->all_secrets_for($env);
+	my (@different);
+	for my $secret_path (@secret_paths) {
+		my ($path, $key) = @$secret_path;
+		push @different, join(":", $path, $key) if ($secrets_old->{$path}{$key} ne $secrets_new->{$path}{$key});
+	}
+	my @expected = qw(
+		secret/genesis-2.7.0/deployments/dev/azure/us1/secondary/ca:certificate
+		secret/genesis-2.7.0/deployments/dev/azure/us1/secondary/ca:key
+		secret/genesis-2.7.0/deployments/dev/azure/us1/secondary/ca:crl
+		secret/genesis-2.7.0/deployments/dev/azure/us1/secondary/ca:serial
+		secret/genesis-2.7.0/deployments/dev/azure/us1/secondary/ca:combined
+		secret/genesis-2.7.0/deployments/dev/azure/us1/passwords:alt
+		secret/genesis-2.7.0/deployments/dev/azure/us1/passwords:alt-base64
+		secret/genesis-2.7.0/deployments/dev/azure/us1/passwords:uncrypted
+		secret/genesis-2.7.0/deployments/dev/azure/us1/passwords:crypted
+		secret/genesis-2.7.0/deployments/dev/azure/us1/top-level/top:crl
+		secret/genesis-2.7.0/deployments/dev/azure/us1/top-level/top:serial
+	);
+	cmp_deeply(\@different, bag(@expected), "Only the expected secrets changed (including top-level/top crl and serial)");
 
 	($pass,$rc,$out) = run_fails "genesis check-secrets $env_name --validate", "rotation does not rotate certs signed by changed cas";
 	$out =~ s/(Duration:|-) \d+ seconds/$1 XXX seconds/g;
-  $out =~ s/expires in (\d+) days \(([^\)]+)\)/expires in $1 days (<timestamp>)/g;
-  $out =~ s/ca\.n\d{9}\./ca.n<random>./g;
+	$out =~ s/expires in (\d+) days \(([^\)]+)\)/expires in $1 days (<timestamp>)/g;
+	$out =~ s/ca\.n\d{9}\./ca.n<random>./g;
 	eq_or_diff $out, <<'EOF', "genesis add-secrets reports existing secrets";
 Parsing kit secrets descriptions ... done. - XXX seconds
 Retrieving all existing secrets ... done. - XXX seconds
