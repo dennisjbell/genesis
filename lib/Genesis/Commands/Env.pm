@@ -123,8 +123,8 @@ sub edit {
 	bail(
 		"Cannot specify #Y{--manual} unless the editor is vi-based (vi,vim,mvim,".
 		"nvim,gvim), vscode (code) or emacs: ".
-		"Pull request are welcome for other editors."
-	) if $use_manual && ! $editor =~ m/^([gmn]?vim|vi|emacs|code)$/;
+		"Pull requests are welcome for other editors."
+	) if $use_manual && $editor !~ m/^([gmn]?vim|vi|emacs|code)$/;
 	if ($use_manual//1 && $editor =~ m/^([gmn]?vim|vi|emacs|code)$/) {
 		if ($kit_name eq 'dev') {
 			if (-d $top->path('dev')) {
@@ -165,8 +165,8 @@ sub edit {
 	my $show_ancestors = defined(get_options->{ancestors}) ? (get_options->{ancestors} ? 1 : 0) : undef;
 	bail(
 		"Cannot specify #Y{--include-all-ancestors} unless the editor is vi-based ".
-		"(vi,vim,mvim,nvim,gvim) or vscode (code): Pull request are welcome for other editors."
-	) if $show_ancestors && !$editor =~ m/^([gmn]?vim|vi|^code)$/;
+		"(vi,vim,mvim,nvim,gvim) or vscode (code): Pull requests are welcome for other editors."
+	) if $show_ancestors && $editor !~ m/^([gmn]?vim|vi|code)$/;
 
 	if ($show_ancestors//1 && $editor =~ m/^([gmn]?vim|vi|code)$/) {
 		my @ancestors = reverse $env->potential_environment_files;
